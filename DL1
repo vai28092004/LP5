@@ -1,0 +1,64 @@
+# PRE-REQUISITE
+
+# Install necessary libraries (will skip if already installed)
+!pip install -q tensorflow scikit-learn matplotlib
+
+# Import libraries
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# Check library versions
+print("TensorFlow version:", tf.__version__)
+import sklearn
+print("Scikit-learn version:", sklearn.__version__)
+import matplotlib
+print("Matplotlib version:", matplotlib.__version__)
+
+START..............
+# Install TensorFlow if not already installed
+# !pip install tensorflow
+
+# Import libraries
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+
+# Load Boston Housing dataset from Keras
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.boston_housing.load_data()
+
+# Standardize the features
+scaler = StandardScaler()
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
+
+# Build the Deep Neural Network model
+model = Sequential([
+    Dense(64, activation='relu', input_shape=(x_train.shape[1],)),
+    Dense(32, activation='relu'),
+    Dense(1)  # Linear output for regression
+])
+
+# Compile the model
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+
+# Train the model
+model.fit(x_train, y_train, epochs=100, batch_size=32, validation_split=0.1, verbose=1)
+
+# Evaluate the model
+loss, mae = model.evaluate(x_test, y_test, verbose=1)
+print(f"Test Mean Absolute Error: {mae:.2f}")
+
+# Predict house prices
+y_pred = model.predict(x_test)
+
+# Plot Actual vs Predicted prices
+plt.scatter(y_test, y_pred)
+plt.xlabel("Actual Prices")
+plt.ylabel("Predicted Prices")
+plt.title("Actual vs Predicted House Prices")
+plt.show()
