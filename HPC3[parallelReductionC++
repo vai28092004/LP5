@@ -1,0 +1,143 @@
+#include <iostream>
+#include <cuda.h>
+#include <chrono> // For CPU timing
+#include <cstdlib> // For random number generation
+#include <ctime> // For seeding the random number generator
+
+using namespace std;
+using namespace chrono;
+
+__global__ void parallelReduction(int *input, int *output, int N) {
+    __shared__ int sharedMem[256];  // Shared memory for the block
+
+    int index = threadIdx.x + blockIdx.x * blockDim.x;
+    int thread = threadIdx.x;
+
+    // Initialize shared memory
+    sharedMem[thread] = (index < N) ? input[index] : 0;
+    __syncthreads();
+
+    // Perform parallel reduction within each block
+    for (int stride = blockDim.x / 2; stride > 0; stride /= 2) {
+        if (thread < stride) {
+            sharedMem[thread] += sharedMem[thread + stride];
+        }
+        __syncthreads();
+    }
+
+    // Write the result from each block into global memory
+    if (thread == 0) {
+        output[blockIdx.x] = sharedMem[0];
+    }
+}
+
+void cpuReduction(int *input, int N, int &min, int &max, int &sum, int &average) {
+    min = input[0];
+    max = input[0];
+    sum = 0;
+
+    for (int i = 0; i < N; i++) {
+        sum += input[i];
+        if (input[i] < min) min = input[i];
+        if (input[i] > max) max = input[i];
+    }
+
+    average = sum / N;
+}
+
+int main() {
+    srand(time(0));  // Seed for random number generation
+
+    int N;
+    cout << "Enter the size of the array: ";
+    cin >> N;
+
+    int size = N * sizeof(int);
+    int *h_input = new int[N];
+    int *h_output_GPU = new int[(N + 255) / 256];  // Number of blocks (rounded up)
+
+    // Generate random numbers for the array
+    for (int i = 0; i < N; i++) {
+        h_input[i] = rand() % 100;  // Random number between 0 and 99
+    }
+
+    // CPU Sequential Execution
+    int min_CPU, max_CPU, sum_CPU, avg_CPU;
+    auto startCPU = high_resolution_clock::now();
+    cpuReduction(h_input, N, min_CPU, max_CPU, sum_CPU, avg_CPU);
+    auto endCPU = high_resolution_clock::now();
+    auto durationCPU = duration_cast<microseconds>(endCPU - startCPU);
+
+    // GPU Parallel Execution
+    int *d_input, *d_output;
+    cudaMalloc((void**)&d_input, size);
+    cudaMalloc((void**)&d_output, (N + 255) / 256 * sizeof(int));
+
+    cudaMemcpy(d_input, h_input, size, cudaMemcpyHostToDevice);
+
+    dim3 threadsPerBlock(256);
+    dim3 blocksPerGrid((N + 255) / 256);
+
+    // Call GPU kernel
+    parallelReduction<<<blocksPerGrid, threadsPerBlock>>>(d_input, d_output, N);
+
+    // Copy result from GPU to CPU
+    int *h_blockResults = new int[(N + 255) / 256];
+    cudaMemcpy(h_blockResults, d_output, (N + 255) / 256 * sizeof(int), cudaMemcpyDeviceToHost);
+
+    // Perform final reduction on CPU for the GPU results
+    int sum_GPU = 0;
+    for (int i = 0; i < (N + 255) / 256; i++) {
+        sum_GPU += h_blockResults[i];
+    }
+
+    // Calculate average
+    int avg_GPU = sum_GPU / N;
+
+    float milliseconds = 0;
+    cudaEvent_t startGPU, stopGPU;
+    cudaEventCreate(&startGPU);
+    cudaEventCreate(&stopGPU);
+    cudaEventRecord(startGPU);
+
+    // Time the GPU execution
+    cudaEventRecord(stopGPU);
+    cudaEventSynchronize(stopGPU);
+    cudaEventElapsedTime(&milliseconds, startGPU, stopGPU);
+
+    // Output results
+    cout << "\nCPU Results:" << endl;
+    cout << "Min: " << min_CPU << ", Max: " << max_CPU << ", Sum: " << sum_CPU << ", Average: " << avg_CPU << endl;
+
+    cout << "\nGPU Results:" << endl;
+    cout << "Sum: " << sum_GPU << ", Average: " << avg_GPU << endl;
+
+    cout << "\nTime Taken by CPU (sequential): " << durationCPU.count() << " microseconds" << endl;
+    cout << "Time Taken by GPU (parallel): " << milliseconds << " milliseconds" << endl;
+
+    // Cleanup
+    cudaFree(d_input);
+    cudaFree(d_output);
+    delete[] h_input;
+    delete[] h_output_GPU;
+    delete[] h_blockResults;
+
+    return 0;
+}
+/*
+cd ~/Desktop
+nvcc -o parallel_reduction parallel_reduction.cu
+./parallel_reduction
+
+Enter the size of the array: 1000
+CPU Results:
+Min: 3, Max: 98, Sum: 49850, Average: 49
+
+GPU Results:
+Sum: 49850, Average: 49
+
+Time Taken by CPU (sequential): 2500 microseconds
+Time Taken by GPU (parallel): 2.5 milliseconds
+
+Enter the size of the array: 10
+*/
