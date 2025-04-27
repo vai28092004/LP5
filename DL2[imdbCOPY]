@@ -1,0 +1,137 @@
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import re
+import os
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix, roc_auc_score
+
+
+# **Step 1: Load Dataset from Local Directory**
+file_path = "IMDB Dataset.csv"  # 👉 Replace this with your actual file path
+df = pd.read_csv(file_path)
+
+
+# **Step 1: Handling Null Values**
+df.dropna(inplace=True)  # Remove missing values
+
+
+df.head(5) 
+
+
+# **Step 3: Text Preprocessing (Cleaning)**
+def clean_text(text):
+    text = text.lower()  # Convert to lowercase
+    text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text)  # Remove special characters
+    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+    return text 
+
+
+df['review'] = df['review'].apply(clean_text) 
+
+
+# **Step 4: Convert Sentiments to Binary**
+df['sentiment'] = df['sentiment'].map({'positive': 1, 'negative': 0}) 
+
+
+# **Tokenization & Padding**
+vocab_size = 6000  # ✅ Reduced vocab size for faster training
+max_length = 150  # ✅ Reduced sequence length
+embedding_dim = 64  # ✅ Smaller embedding size
+batch_size = 64 # ✅ Lower batch size for memory efficiency
+tokenizer = Tokenizer(num_words=vocab_size, oov_token="<OOV>")
+tokenizer.fit_on_texts(df['review'])
+sequences = tokenizer.texts_to_sequences(df['review'])
+padded_sequences = pad_sequences(sequences, maxlen=max_length, padding='post')
+
+
+
+# **Train-Test Split**
+X_train, X_test, y_train, y_test = train_test_split(padded_sequences, df['sentiment'], test_size=0.2, random_state=42) 
+
+
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=max_length),
+    tf.keras.layers.Conv1D(64, 5, activation='relu'),  # Convolutional Layer
+    tf.keras.layers.GlobalMaxPooling1D(),  # Pooling Layer
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dropout(0.4),  # Dropout for Regularization
+    tf.keras.layers.Dense(1, activation='sigmoid')  # Output Layer
+]) 
+
+
+
+# **Compile Model**
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy']) 
+
+
+
+# **Train Model (Fewer Epochs)**
+history = model.fit(X_train, y_train, epochs=4, batch_size=batch_size, validation_data=(X_test, y_test)) 
+
+
+
+# **Evaluate Model**
+test_loss, test_acc = model.evaluate(X_test, y_test)
+print(f"\n✅ Test Accuracy: {test_acc:.2f}")
+
+
+
+# **Predictions & Metrics**
+y_pred_probs = model.predict(X_test)
+y_pred = (y_pred_probs > 0.5).astype("int32").flatten()
+
+
+
+accuracy = accuracy_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+print(f"\n✅ Performance Metrics:")
+print(f"🔹 Accuracy: {accuracy * 100:.2f}%")
+print(f"🔹 Precision: {precision:.2f}")
+print(f"🔹 Recall: {recall:.2f}")
+print(f"🔹 F1-Score: {f1:.2f}") 
+
+# **Step 14: Misclassified Samples**
+misclassified_indices = np.where(y_pred != y_test.to_numpy())[0]
+print(f"\n🔹 Number of Misclassified Samples: {len(misclassified_indices)}")  
+
+
+
+
+# Get some misclassified sample indices
+num_samples_to_display = 5  # Change this number if you want to see more examples
+misclassified_samples = misclassified_indices[:num_samples_to_display]
+
+print("\n🔹 Sample Misclassified Reviews:")
+for idx in misclassified_samples:
+    print(f"\n🔹 Review: {df.iloc[idx]['review'][:300]}...")  # Displaying first 300 characters
+    print(f"   ✅ Actual Sentiment: {'Positive' if y_test.iloc[idx] == 1 else 'Negative'}")
+    print(f"   ❌ Predicted Sentiment: {'Positive' if y_pred[idx] == 1 else 'Negative'}")
+
+
+
+
+# Suppose your Tokenizer is called 'tokenizer'
+# Suppose your trained model is called 'model'
+
+# New input text
+new_review = input("Enter your review: ")
+
+# Preprocess the new input (tokenize and pad)
+new_seq = tokenizer.texts_to_sequences([new_review])
+new_padded = pad_sequences(new_seq, maxlen=max_length, padding='post', truncating='post')
+
+# Predict
+predicted_prob = model.predict(new_padded)[0][0]
+
+# Convert probability to class label
+predicted_sentiment = 'Positive' if predicted_prob >= 0.5 else 'Negative'
+
+# Output
+print(f"Predicted Sentiment: {predicted_sentiment}")
