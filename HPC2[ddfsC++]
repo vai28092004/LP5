@@ -1,0 +1,143 @@
+#include <iostream>
+#include <vector>
+#include <stack>
+#include <omp.h>
+
+using namespace std;
+
+class Graph {
+public:
+    int V; // Number of vertices
+    vector<vector<int>> adj; // Adjacency list
+
+    Graph(int V) {
+        this->V = V;
+        adj.resize(V); // Resize adjacency list for the number of vertices
+    }
+
+    // Function to add an undirected edge
+    void addEdge(int u, int v) {
+        adj[u].push_back(v); // Add vertex v to u's adjacency list
+        adj[v].push_back(u); // Add vertex u to v's adjacency list
+    }
+
+    // Sequential DFS
+    void DFS_Sequential(int start) {
+        vector<bool> visited(V, false); // To track visited nodes
+        stack<int> s; // Stack for DFS traversal
+
+        visited[start] = true; // Mark the start node as visited
+        s.push(start); // Push the start node to the stack
+
+        cout << "DFS Traversal (Sequential): ";
+
+        while (!s.empty()) {
+            int node = s.top(); // Get the top node of the stack
+            s.pop(); // Remove the node from the stack
+
+            cout << node << " "; // Print the node
+
+            for (int i = 0; i < adj[node].size(); i++) { // Iterate through neighbors
+                int neighbor = adj[node][i]; // Get neighbor
+                if (!visited[neighbor]) { // If neighbor has not been visited
+                    visited[neighbor] = true; // Mark the neighbor as visited
+                    s.push(neighbor); // Push the neighbor to the stack
+                }
+            }
+        }
+        cout << endl;
+    }
+
+    // Parallel DFS using OpenMP
+    void DFS_Parallel(int start) {
+        vector<bool> visited(V, false); // To track visited nodes
+        stack<int> s; // Stack for DFS traversal
+
+        visited[start] = true; // Mark the start node as visited
+        s.push(start); // Push the start node to the stack
+
+        cout << "DFS Traversal (Parallel): ";
+
+        while (!s.empty()) {
+            int node = s.top(); // Get the top node of the stack
+            s.pop(); // Remove the node from the stack
+
+            cout << node << " "; // Print the node
+
+            // Parallelize the exploration of neighbors
+            #pragma omp parallel for
+            for (int i = 0; i < adj[node].size(); i++) { // Iterate through neighbors
+                int neighbor = adj[node][i]; // Get neighbor
+                if (!visited[neighbor]) { // If neighbor has not been visited
+                    #pragma omp critical
+                    {
+                        if (!visited[neighbor]) { // Double-check inside critical section
+                            visited[neighbor] = true; // Mark the neighbor as visited
+                            s.push(neighbor); // Push the neighbor into the stack
+                        }
+                    }
+                }
+            }
+        }
+        cout << endl;
+    }
+};
+
+int main() {
+    int V, E;
+    cout << "Enter number of vertices: ";
+    cin >> V; // Input number of vertices
+
+    Graph g(V); // Create a graph with V vertices
+
+    cout << "Enter number of edges: ";
+    cin >> E; // Input number of edges
+
+    cout << "Enter the edges (u v format):" << endl;
+    for (int i = 0; i < E; i++) {
+        int u, v;
+        cin >> u >> v; // Input an edge between u and v
+        g.addEdge(u, v); // Add the edge to the graph
+    }
+
+    int start;
+    cout << "Enter the starting node for DFS: ";
+    cin >> start; // Input the starting node for DFS
+
+    // Measure execution time for sequential DFS
+    double start_time_seq = omp_get_wtime(); // Get the start time for sequential DFS
+    g.DFS_Sequential(start); // Run DFS sequentially
+    double end_time_seq = omp_get_wtime(); // Get the end time for sequential DFS
+    cout << "Time taken for Sequential DFS: " << end_time_seq - start_time_seq << " seconds" << endl;
+
+    // Measure execution time for parallel DFS
+    double start_time_par = omp_get_wtime(); // Get the start time for parallel DFS
+    g.DFS_Parallel(start); // Run DFS in parallel
+    double end_time_par = omp_get_wtime(); // Get the end time for parallel DFS
+    cout << "Time taken for Parallel DFS: " << end_time_par - start_time_par << " seconds" << endl;
+
+    return 0;
+}
+
+/*
+
+g++ -fopenmp -o parallel_dfs parallel_dfs.cpp 
+./parallel_dfs
+
+Enter number of vertices: 5
+Enter number of edges: 4
+Enter the edges (u v format):
+0 1
+1 2
+2 3
+3 4
+Enter the starting node for DFS: 0
+
+DFS Traversal (Sequential): 0 1 2 3 4 
+Time taken for Sequential DFS: A seconds
+
+DFS Traversal (Parallel): 0 1 2 3 4 
+Time taken for Parallel DFS: B seconds
+
+
+*/
