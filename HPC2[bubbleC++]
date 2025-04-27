@@ -1,0 +1,92 @@
+
+#include <iostream>
+#include <vector>
+#include <ctime>
+#include <omp.h>
+
+using namespace std;
+
+// Sequential Bubble Sort
+void sequentialBubbleSort(vector<int>& arr) {
+    int n = arr.size();
+    for (int i = 0; i < n - 1; ++i) {
+        for (int j = 0; j < n - i - 1; ++j) {
+            if (arr[j] > arr[j + 1])
+                swap(arr[j], arr[j + 1]);
+        }
+    }
+}
+
+// Parallel Bubble Sort using OpenMP
+void parallelBubbleSort(vector<int>& arr) {
+    int n = arr.size();
+    for (int i = 0; i < n; ++i) {
+        // Odd phase
+        if (i % 2 == 0) {
+#pragma omp parallel for
+            for (int j = 0; j < n - 1; j += 2) {
+                if (arr[j] > arr[j + 1])
+                    swap(arr[j], arr[j + 1]);
+            }
+        }
+        // Even phase
+        else {
+#pragma omp parallel for
+            for (int j = 1; j < n - 1; j += 2) {
+                if (arr[j] > arr[j + 1])
+                    swap(arr[j], arr[j + 1]);
+            }
+        }
+    }
+}
+
+// Utility to print array
+void printArray(const vector<int>& arr) {
+    for (int val : arr)
+        cout << val << " ";
+    cout << endl;
+}
+
+int main() {
+    int n;
+    cout << "Enter number of elements: ";
+    cin >> n;
+
+    vector<int> arr(n), arr_copy(n);
+
+    cout << "Enter " << n << " elements:\n";
+    for (int i = 0; i < n; ++i) {
+        cin >> arr[i];
+    }
+    arr_copy = arr; // Copy for parallel sort
+
+    // Sequential Sort Timing
+    double start_seq = omp_get_wtime();
+    sequentialBubbleSort(arr);
+    double end_seq = omp_get_wtime();
+
+    cout << "\nSorted array using Sequential Bubble Sort:\n";
+    printArray(arr);
+    cout << "Time taken (Sequential): " << (end_seq - start_seq) << " seconds\n";
+
+    // Parallel Sort Timing
+    double start_par = omp_get_wtime();
+    parallelBubbleSort(arr_copy);
+    double end_par = omp_get_wtime();
+
+    cout << "\nSorted array using Parallel Bubble Sort:\n";
+    printArray(arr_copy);
+    cout << "Time taken (Parallel): " << (end_par - start_par) << " seconds\n";
+
+    return 0;
+}
+
+
+/*
+cd ~/Desktop
+g++ -fopenmp  -o filename filename.cpp 
+./filename
+
+enter elements: 5
+sort, time 
+*/
