@@ -1,0 +1,125 @@
+#include <iostream>
+#include <vector>
+#include <omp.h>
+using namespace std;
+
+// Function to merge two halves
+void merge(vector<int>& arr, int left, int mid, int right) {
+    int n1 = mid - left + 1;  // Size of left half
+    int n2 = right - mid;     // Size of right half
+
+    vector<int> L(n1), R(n2);
+
+    // Copy data to temp arrays
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[left + i];
+    for (int j = 0; j < n2; j++)
+        R[j] = arr[mid + 1 + j];
+
+    // Merge the temp arrays back into arr[left..right]
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j])
+            arr[k++] = L[i++];
+        else
+            arr[k++] = R[j++];
+    }
+
+    // Copy remaining elements if any
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
+}
+
+// Sequential Merge Sort
+void sequentialMergeSort(vector<int>& arr, int left, int right) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+        sequentialMergeSort(arr, left, mid);
+        sequentialMergeSort(arr, mid + 1, right);
+        merge(arr, left, mid, right);
+    }
+}
+
+// Parallel Merge Sort using OpenMP
+void parallelMergeSort(vector<int>& arr, int left, int right, int depth = 0) {
+    if (left < right) {
+        int mid = left + (right - left) / 2;
+
+        if (depth <= 3) { // Limit parallel depth to avoid too many threads
+            #pragma omp parallel sections
+            {
+                #pragma omp section
+                parallelMergeSort(arr, left, mid, depth + 1);
+
+                #pragma omp section
+                parallelMergeSort(arr, mid + 1, right, depth + 1);
+            }
+        } else {
+            sequentialMergeSort(arr, left, mid);
+            sequentialMergeSort(arr, mid + 1, right);
+        }
+        merge(arr, left, mid, right);
+    }
+}
+
+// Utility function to print array
+void printArray(const vector<int>& arr) {
+    for (int val : arr)
+        cout << val << " ";
+    cout << endl;
+}
+
+int main() {
+    int n;
+    cout << "Enter number of elements: ";
+    cin >> n;
+
+    vector<int> arr(n), arr_copy(n);
+
+    cout << "Enter " << n << " elements:\n";
+    for (int i = 0; i < n; ++i) {
+        cin >> arr[i];
+    }
+
+    arr_copy = arr;
+
+    // Sequential Merge Sort
+    double start_seq = omp_get_wtime();
+    sequentialMergeSort(arr, 0, n - 1);
+    double end_seq = omp_get_wtime();
+
+    cout << "\nSorted array using Sequential Merge Sort:\n";
+    printArray(arr);
+    cout << "Time taken (Sequential): " << (end_seq - start_seq) << " seconds\n";
+
+    // Parallel Merge Sort
+    double start_par = omp_get_wtime();
+    parallelMergeSort(arr_copy, 0, n - 1);
+    double end_par = omp_get_wtime();
+
+    cout << "\nSorted array using Parallel Merge Sort:\n";
+    printArray(arr_copy);
+    cout << "Time taken (Parallel): " << (end_par - start_par) << " seconds\n";
+
+    return 0;
+}
+/*
+cd ~/Desktop
+g++ -fopenmp -o merge_sort merge_sort.cpp 
+./merge_sort
+
+Enter number of elements: 8
+Enter 8 elements:
+7 2 9 1 6 5 3 8
+
+Sorted array using Sequential Merge Sort:
+1 2 3 5 6 7 8 9
+Time taken (Sequential): 0.00001 seconds
+
+Sorted array using Parallel Merge Sort:
+1 2 3 5 6 7 8 9
+Time taken (Parallel): 0.000005 seconds
+
+*/
