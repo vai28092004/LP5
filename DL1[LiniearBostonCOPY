@@ -1,0 +1,80 @@
+
+# Install necessary libraries if not installed
+# !pip install tensorflow scikit-learn matplotlib --quiet
+#!pip --version
+!python -m pip install --upgrade pip
+
+
+
+# Import required libraries
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from tensorflow import keras
+from keras import layers
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+
+# Load dataset
+data = pd.read_csv('boston_housing.csv')
+
+# Check data (optional steps)
+print(data.head())
+print(data.isnull().sum())
+print(data.info())
+print(data.describe())
+
+# Separate features and target
+x = data.drop(columns=['MEDV'])
+y = data['MEDV'].values
+
+# Train-Test Split
+x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=42)
+
+# Standardize the features
+scaler = StandardScaler()
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
+
+# Build Linear Regression Model using DNN
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(13,), name='input-layer'),
+    tf.keras.layers.Dense(1, activation='linear', name='output-layer')
+])
+
+# Compile the model
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Train the model
+history = model.fit(x_train, y_train, epochs=100, batch_size=32, validation_data=(x_test, y_test), verbose=1)
+
+# Model Summary
+model.summary()
+
+# Predict on Test Set
+y_pred = model.predict(x_test)
+
+# Evaluate the model
+mse = mean_squared_error(y_test, y_pred)
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f'MSE: {mse:.2f}')
+print(f'RMSE: {rmse:.2f}')
+print(f'MAE: {mae:.2f}')
+print(f'R² Score: {r2:.2f}')
+
+# Predict for new data
+new_data = np.array([
+    [0.1, 0.2, 7.2, 0.0, 0.0, 6.0, 15.0, 1.0, 5.0, 300.0, 10.0, 300.0, 15.0],
+    [0.2, 0.3, 6.5, 0.0, 0.0, 5.5, 20.0, 1.5, 4.0, 250.0, 15.0, 280.0, 12.0]
+])
+
+# Scale the new data using the same scaler
+new_data_scaled = scaler.transform(new_data)
+
+# Predict
+predictions = model.predict(new_data_scaled)
+print("Predicted Housing Prices:", predictions.flatten())
